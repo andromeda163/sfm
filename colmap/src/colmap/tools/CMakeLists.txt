@@ -30,4 +30,11 @@
 
 set(FOLDER_NAME "tools")
 
-# COLMAP_ADD_EXECUTABLE(example example.cc)
+COLMAP_ADD_EXECUTABLE(
+    NAME sift_extract
+    SRCS sift_extract.cc
+    LINK_LIBS
+        colmap_feature
+        colmap_sensor
+        colmap_util
+)
