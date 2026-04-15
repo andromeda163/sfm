@@ -1,2 +1,0 @@
-/usr/bin/ar qc libvlfeat_sift.a CMakeFiles/vlfeat_sift.dir/thirdparty/vlfeat/sift.c.o CMakeFiles/vlfeat_sift.dir/thirdparty/vlfeat/generic.c.o CMakeFiles/vlfeat_sift.dir/thirdparty/vlfeat/mathop.c.o CMakeFiles/vlfeat_sift.dir/thirdparty/vlfeat/random.c.o CMakeFiles/vlfeat_sift.dir/thirdparty/vlfeat/host.c.o CMakeFiles/vlfeat_sift.dir/thirdparty/vlfeat/imopv.c.o CMakeFiles/vlfeat_sift.dir/thirdparty/vlfeat/scalespace.c.o CMakeFiles/vlfeat_sift.dir/thirdparty/vlfeat/mathop_sse2.c.o CMakeFiles/vlfeat_sift.dir/thirdparty/vlfeat/imopv_sse2.c.o
-/usr/bin/ranlib libvlfeat_sift.a

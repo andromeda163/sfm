@@ -1,8 +1,0 @@
-/testbed/sfm/sift/build/CMakeFiles/vlfeat_sift.dir
-/testbed/sfm/sift/build/CMakeFiles/sift_extract.dir
-/testbed/sfm/sift/build/CMakeFiles/edit_cache.dir
-/testbed/sfm/sift/build/CMakeFiles/rebuild_cache.dir
-/testbed/sfm/sift/build/CMakeFiles/list_install_components.dir
-/testbed/sfm/sift/build/CMakeFiles/install.dir
-/testbed/sfm/sift/build/CMakeFiles/install/local.dir
-/testbed/sfm/sift/build/CMakeFiles/install/strip.dir

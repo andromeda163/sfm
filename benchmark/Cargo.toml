@@ -1,0 +1,34 @@
+[package]
+name = "sift-benchmark"
+version = "0.1.0"
+edition = "2021"
+description = "SIFT feature extraction benchmark comparing multiple implementations"
+
+[dependencies]
+# SIFT implementations to compare
+sift-wgpu = "0.1"
+
+# Image handling
+image = "0.25"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# Serialization for output
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Timing
+humantime = "2.1"
+
+# Error handling
+anyhow = "1.0"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+
+[[bin]]
+name = "sift-benchmark"
+path = "src/main.rs"

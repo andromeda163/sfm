@@ -1,1 +1,5 @@
 output/
+
+# CMake build directory
+sift/build/
+build/

@@ -1,37 +1,178 @@
 #!/bin/bash
-# Compare SIFT features extracted by COLMAP and standalone tools
+# Compare SIFT features extracted by COLMAP, Standalone C++, and sift-wgpu (Rust)
+# Includes timing benchmarks
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COLMAP_OUTPUT="${SCRIPT_DIR}/output/sift"
 CUSTOM_OUTPUT="${SCRIPT_DIR}/output/sift_custom"
+WGPU_OUTPUT="${SCRIPT_DIR}/output/sift_wgpu"
 DATA_DIR="${SCRIPT_DIR}/data"
 VIS_OUTPUT="${SCRIPT_DIR}/output/comparison"
+BENCHMARK_OUTPUT="${SCRIPT_DIR}/output/benchmark"
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Benchmark parameters
+MAX_FEATURES=${MAX_FEATURES:-1000}
+WARMUP=${WARMUP:-2}
+ITERATIONS=${ITERATIONS:-5}
+IMAGE_LIMIT=${IMAGE_LIMIT:-10}
+
 echo "=============================================="
-echo "SIFT Feature Comparison Tool"
+echo "SIFT Feature Comparison & Benchmark Tool"
 echo "=============================================="
 echo ""
-echo "COLMAP output:  ${COLMAP_OUTPUT}"
-echo "Custom output:  ${CUSTOM_OUTPUT}"
-echo "Visual output:  ${VIS_OUTPUT}"
+echo "COLMAP output:      ${COLMAP_OUTPUT}"
+echo "Custom output:      ${CUSTOM_OUTPUT}"
+echo "sift-wgpu output:   ${WGPU_OUTPUT}"
+echo "Visual output:      ${VIS_OUTPUT}"
+echo "Benchmark output:   ${BENCHMARK_OUTPUT}"
+echo ""
+echo "Parameters:"
+echo "  Max features:     ${MAX_FEATURES}"
+echo "  Warmup:           ${WARMUP}"
+echo "  Iterations:       ${ITERATIONS}"
+echo "  Image limit:      ${IMAGE_LIMIT}"
 echo ""
 
-# Create output directory
+# Create output directories
 mkdir -p "${VIS_OUTPUT}"
+mkdir -p "${BENCHMARK_OUTPUT}"
 
-# Check if Python is available
+# Check for Python
 if ! command -v python3 &> /dev/null; then
-    echo "Error: Python3 is required for comparison"
+    echo "Error: Python3 is required"
     exit 1
 fi
+
+# Function to time a command
+time_command() {
+    local start end duration
+    start=$(date +%s.%N)
+    "$@" > /dev/null 2>&1
+    end=$(date +%s.%N)
+    duration=$(awk "BEGIN {printf \"%.2f\", ($end - $start) * 1000}")
+    echo "$duration"
+}
+
+# Function to run benchmark for an implementation
+run_benchmark() {
+    local name=$1
+    local binary=$2
+    local output_dir=$3
+    shift 3
+    
+    echo -e "${BLUE}Benchmarking ${name}...${NC}"
+    
+    if [ ! -f "${binary}" ]; then
+        echo -e "  ${YELLOW}Binary not found: ${binary}${NC}"
+        return 1
+    fi
+    
+    mkdir -p "${output_dir}"
+    
+    local count=0
+    local total_time=0
+    local total_features=0
+    
+    # Process images from bear01 dataset
+    for img in "${DATA_DIR}/bear01/bear01_000"{1..9}.jpg "${DATA_DIR}/bear01/bear01_001"{0..${IMAGE_LIMIT}}.jpg; do
+        if [ -f "$img" ] && [ $count -lt $IMAGE_LIMIT ]; then
+            local img_name=$(basename "$img" .jpg)
+            
+            # Warmup runs
+            for i in $(seq 1 $WARMUP); do
+                "${binary}" --max_features ${MAX_FEATURES} "$img" "${output_dir}" > /dev/null 2>&1 || true
+            done
+            
+            # Timed runs
+            local run_times=""
+            for i in $(seq 1 $ITERATIONS); do
+                local ms=$(time_command "${binary}" --max_features ${MAX_FEATURES} "$img" "${output_dir}")
+                run_times="$run_times $ms"
+            done
+            
+            # Calculate average
+            local avg_time=$(echo "$run_times" | tr ' ' '\n' | awk '{sum+=$1; count++} END {if(count>0) print sum/count; else print 0}')
+            
+            # Get feature count
+            local txt_file="${output_dir}/${img_name}_keypoints.txt"
+            local features=0
+            if [ -f "$txt_file" ]; then
+                features=$(head -1 "$txt_file" | cut -d' ' -f1)
+            fi
+            
+            printf "  %-20s %8.2f ms  %6d features\n" "$img_name" "$avg_time" "$features"
+            
+            total_time=$(awk "BEGIN {printf \"%.2f\", $total_time + $avg_time}")
+            total_features=$((total_features + features))
+            count=$((count + 1))
+        fi
+    done
+    
+    if [ $count -gt 0 ]; then
+        local avg_total=$(awk "BEGIN {printf \"%.2f\", $total_time / $count}")
+        echo -e "  ${GREEN}Average: ${avg_total} ms, ${total_features} total features${NC}"
+    fi
+    
+    echo ""
+    return 0
+}
+
+# Run benchmarks
+echo "=============================================="
+echo "RUNNING BENCHMARKS"
+echo "=============================================="
+echo ""
+
+# Benchmark COLMAP
+COLMAP_BIN="${SCRIPT_DIR}/colmap/build/src/colmap/tools/sift_extract"
+if [ -f "${COLMAP_BIN}" ]; then
+    run_benchmark "COLMAP (C++/VLFeat)" "${COLMAP_BIN}" "${COLMAP_OUTPUT}"
+else
+    echo -e "${YELLOW}COLMAP not built. Run extract_sift.sh first.${NC}"
+    echo ""
+fi
+
+# Benchmark Standalone C++
+STANDALONE_BIN="${SCRIPT_DIR}/sift/build/sift_extract"
+if [ -f "${STANDALONE_BIN}" ]; then
+    run_benchmark "Standalone C++ (VLFeat)" "${STANDALONE_BIN}" "${CUSTOM_OUTPUT}"
+else
+    echo -e "${YELLOW}Standalone SIFT not built. Run extract_sift_custom.sh first.${NC}"
+    echo ""
+fi
+
+# Benchmark sift-wgpu (Rust)
+WGPU_BIN="${SCRIPT_DIR}/benchmark/target/release/sift-benchmark"
+if [ -f "${WGPU_BIN}" ]; then
+    echo -e "${BLUE}Benchmarking sift-wgpu (Rust)...${NC}"
+    "${WGPU_BIN}" \
+        --input "${DATA_DIR}/bear01" \
+        --output "${BENCHMARK_OUTPUT}" \
+        --max-features ${MAX_FEATURES} \
+        --warmup ${WARMUP} \
+        --iterations ${ITERATIONS} \
+        --limit ${IMAGE_LIMIT} \
+        --format text 2>&1 || echo -e "${YELLOW}sift-wgpu benchmark failed${NC}"
+    echo ""
+else
+    echo -e "${YELLOW}sift-wgpu not built. Run 'cd benchmark && cargo build --release'.${NC}"
+    echo ""
+fi
+
+# Run feature comparison
+echo "=============================================="
+echo "FEATURE COMPARISON"
+echo "=============================================="
+echo ""
 
 # Install required packages
 pip3 install numpy pillow matplotlib --quiet 2>/dev/null || pip install numpy pillow matplotlib --quiet 2>/dev/null || true
@@ -43,6 +184,7 @@ import sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import math
+import time
 
 def parse_keypoints_txt(filepath):
     """Parse COLMAP format keypoints file"""
@@ -73,16 +215,6 @@ def parse_keypoints_txt(filepath):
 def compute_l2_distance(desc1, desc2):
     """Compute L2 distance between two descriptors"""
     return np.linalg.norm(desc1.astype(np.float32) - desc2.astype(np.float32))
-
-def compute_descriptor_similarity(desc1, desc2):
-    """Compute normalized cosine similarity"""
-    d1 = desc1.astype(np.float32)
-    d2 = desc2.astype(np.float32)
-    norm1 = np.linalg.norm(d1)
-    norm2 = np.linalg.norm(d2)
-    if norm1 > 0 and norm2 > 0:
-        return np.dot(d1, d2) / (norm1 * norm2)
-    return 0.0
 
 def match_features(kp1, desc1, kp2, desc2, threshold=0.8):
     """Simple feature matching using L2 distance ratio test"""
@@ -317,16 +449,24 @@ if __name__ == "__main__":
     main()
 PYTHON_EOF
 
-# Run comparison
-echo "Running comparison..."
-python3 /tmp/compare_sift.py "${COLMAP_OUTPUT}" "${CUSTOM_OUTPUT}" "${VIS_OUTPUT}" "${DATA_DIR}"
+# Run comparison if both COLMAP and Standalone outputs exist
+if [ -d "${COLMAP_OUTPUT}" ] && [ -d "${CUSTOM_OUTPUT}" ]; then
+    echo "Running feature comparison..."
+    python3 /tmp/compare_sift.py "${COLMAP_OUTPUT}" "${CUSTOM_OUTPUT}" "${VIS_OUTPUT}" "${DATA_DIR}"
+else
+    echo -e "${YELLOW}Skipping feature comparison - missing output directories${NC}"
+fi
 
 echo ""
 echo "=============================================="
-echo "Comparison complete!"
+echo "Benchmark and Comparison Complete!"
 echo "=============================================="
 echo ""
 echo "Visualizations saved to: ${VIS_OUTPUT}"
+echo "Benchmark results saved to: ${BENCHMARK_OUTPUT}"
 echo ""
 echo "To view the comparison images:"
 echo "  ls ${VIS_OUTPUT}/*.png"
+echo ""
+echo "To run the Python benchmark script directly:"
+echo "  python3 ${SCRIPT_DIR}/benchmark_sift.py --input ${DATA_DIR}/bear01 --output ${BENCHMARK_OUTPUT}"
