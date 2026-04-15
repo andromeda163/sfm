@@ -1,0 +1,24 @@
+[package]
+name = "sift-wgpu-wrapper"
+version = "0.1.0"
+edition = "2021"
+description = "Minimal wrapper around sift-wgpu with VLFeat-compatible parameters"
+
+[dependencies]
+sift-wgpu = "0.1"
+image = "0.25"
+rayon = "1.10"
+clap = { version = "4.5", features = ["derive"] }
+
+[lib]
+name = "sift_wgpu_wrapper"
+path = "src/lib.rs"
+
+[[bin]]
+name = "sift_extract_wgpu"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

@@ -1,0 +1,28 @@
+[package]
+name = "sift-rust"
+version = "0.1.0"
+edition = "2021"
+description = "SIFT feature extractor matching COLMAP/VLFeat behavior"
+
+[dependencies]
+image = "0.25"
+imageproc = "0.25"
+rayon = "1.10"
+nalgebra = "0.32"
+clap = { version = "4.5", features = ["derive"] }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bin]]
+name = "sift_extract"
+path = "src/main.rs"
+
+[lib]
+name = "sift_rust"
+path = "src/lib.rs"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
